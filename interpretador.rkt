@@ -117,6 +117,7 @@
     (factor (primitiva-unaria "(" expresion ")") primapp-un-exp)
     (factor ("print" "(" (separated-list expresion ",") ")") print-exp)
     (factor (identificador resto-id) id-exp)
+    
 
     (op-rel (">") primitiva-mayor)
     (op-rel ("<") primitiva-menor)
@@ -152,6 +153,15 @@
     (estructura ("switch" expresion "{" (arbno "case" expresion ":" secuencia) "default" ":" secuencia "}") switch-est)
     (estructura ("while" expresion secuencia) while-est)
     (estructura ("for" "(" expresion ";" expresion ";" expresion ")" secuencia) for-est)
+    
+    ;; --- listas: producciones aquí ---
+    
+    ;; --- vectores: producciones aquí ---
+    
+    ;; --- diccionarios: producciones aquí ---
+    
+    ;; --- SAT: producciones aquí ---
+    
     ))
 
 ;;Tipos de datos para la sintaxis abstracta de la gramática
@@ -211,6 +221,7 @@
 ;;Para proc: primero se crea la variable, luego la cerradura captura el ambiente que
 ;;ya contiene esa variable, y por último se guarda la cerradura en la referencia.
 ;;Así el procedimiento se encuentra a sí mismo y la recursión funciona por defecto.
+
 (define evaluar-declaracion
   (lambda (decl env)
     (cases declaracion decl
@@ -231,6 +242,7 @@
 
 ;;evaluar-declaraciones
 ;;Evalúa una lista de declaraciones en orden, cada una con el ambiente de la anterior.
+
 (define evaluar-declaraciones
   (lambda (decls env)
     (if (null? decls)
@@ -261,6 +273,7 @@
 
 ;ambiente-vacio:      -> ambiente
 ;función que crea un ambiente vacío
+
 (define ambiente-vacio  
   (lambda ()
     (vacio)))       ;llamado al constructor de ambiente vacío 
@@ -303,6 +316,7 @@
 
 ;;crear-ref / deref / setref!
 ;;Una referencia es un vector de un solo elemento que guarda el valor mutable.
+
 (define crear-ref (lambda (v) (vector v)))
 (define deref (lambda (r) (vector-ref r 0)))
 (define setref! (lambda (r v) (vector-set! r 0 v)))
@@ -311,6 +325,7 @@
 ;******************************************************************************************
 
 ;;buscar-info: devuelve (list referencia tipo const?) de la variable
+
 (define buscar-info
   (lambda (sym env)
     (cases ambiente env
@@ -331,8 +346,8 @@
     (deref (car (buscar-info sym env)))))
 
 ;;valor-coincide-tipo?
-;;Verifica si el valor v corresponde al tipo t. float acepta enteros (el enunciado
-;;tiene ejemplos como "const float valor2 = 20;"). void no se valida.
+;;Verifica si el valor v corresponde al tipo t (void no se valida). float acepta enteros.
+
 (define valor-coincide-tipo?
   (lambda (t v)
     (cases tipo t
@@ -341,21 +356,89 @@
       (tipo-string () (string? v))
       (tipo-bool () (boolean? v))
       (tipo-void () #t)
-      (tipo-sat () #t)            ; se refina cuando agreguen SAT
-      (tipo-list (t1) #t)         ; se refinan cuando agreguen las estructuras
-      (tipo-vector (t1) #t)
-      (tipo-dict (t1 t2) #t))))
+      (tipo-sat () (instancia-sat? v))
+      (tipo-list (t1) (and (list? v) (todos-coinciden? t1 v)))
+      (tipo-vector (t1) (and (vector-lf? v) (todos-coinciden? t1 (contenido-vector v))))
+      (tipo-dict (tk tv) (and (dict-lf? v) (pares-coinciden? tk tv (pares-dict v)))))))
 
-;;validar-tipo: devuelve v si coincide con el tipo, o lanza error
+;;todos-coinciden?: cada elemento coincide con t (las posiciones sin inicializar se aceptan).
+
+(define todos-coinciden?
+  (lambda (t lst)
+    (cond ((null? lst) #t)
+          ((or (eq? (car lst) 'sin-valor) (valor-coincide-tipo? t (car lst)))
+           (todos-coinciden? t (cdr lst)))
+          (else #f))))
+
+;;pares-coinciden?: cada clave y cada valor coinciden con los tipos del diccionario.
+
+(define pares-coinciden?
+  (lambda (tk tv pares)
+    (cond ((null? pares) #t)
+          ((and (valor-coincide-tipo? tk (car (car pares)))
+                (valor-coincide-tipo? tv (cdr (car pares))))
+           (pares-coinciden? tk tv (cdr pares)))
+          (else #f))))
+
+(define void-tipo?
+  (lambda (t) (cases tipo t (tipo-void () #t) (else #f))))
+
+;;valor-por-defecto: valor inicial de cada posición de make-vector según el tipo de elementos.
+
+(define valor-por-defecto
+  (lambda (t)
+    (cases tipo t
+      (tipo-int () 0)
+      (tipo-float () 0.0)
+      (tipo-string () "")
+      (tipo-bool () #f)
+      (tipo-void () 0)
+      (tipo-list (t1) '())
+      (else 'sin-valor))))
+
+;;preparar-valor
+;;Si el valor es un vector o diccionario que aún no tiene tipo, le asigna el declarado
+;;(y en el vector rellena las posiciones de make-vector con el valor por defecto).
+
+(define preparar-valor
+  (lambda (t v)
+    (cases tipo t
+      (tipo-vector (t1)
+                   (if (vector-lf? v)
+                       (cases vector-lf v
+                         (un-vector (tref eref)
+                                    (begin
+                                      (if (void-tipo? (deref tref))
+                                          (begin
+                                            (setref! tref t)
+                                            (setref! eref (map (lambda (x) (if (eq? x 'sin-valor) (valor-por-defecto t1) x))
+                                                               (deref eref))))
+                                          #f)
+                                      v)))
+                       v))
+      (tipo-dict (tk tv)
+                 (if (dict-lf? v)
+                     (cases dict-lf v
+                       (un-dict (tref pref)
+                                (begin
+                                  (if (void-tipo? (deref tref)) (setref! tref t) #f)
+                                  v)))
+                     v))
+      (else v))))
+
+;;validar-tipo: devuelve v (ya preparado) si coincide con el tipo, o lanza error
+
 (define validar-tipo
   (lambda (t id v)
-    (if (valor-coincide-tipo? t v)
-        v
-        (eopl:error 'tipo "El valor ~s no coincide con el tipo declarado de ~s" v id))))
+    (let ((v2 (preparar-valor t v)))
+      (if (valor-coincide-tipo? t v2)
+          v2
+          (eopl:error 'tipo "El valor ~s no coincide con el tipo declarado de ~s" v id)))))
 
 ;;asignar-variable
 ;;Cambia el valor de una variable existente validando el tipo y bloqueando constantes.
 ;;La usa la asignación x -> exp (resto-asignacion).
+
 (define asignar-variable
   (lambda (sym nuevo env)
     (let* ((info (buscar-info sym env))
@@ -380,6 +463,79 @@
              (lista-ID (list-of symbol?))
              (cuerpo secuencia?)
              (amb ambiente?)))
+
+
+;;*******************************************************************************************
+;;Valores de las estructuras de datos y SAT
+
+;;vector-lf: vector mutable. Guarda su tipo (en una referencia; void mientras no se declare)
+;;y su contenido (en una referencia a una lista, para poder cambiar el tamaño).
+
+(define-datatype vector-lf vector-lf?
+  (un-vector (tipo-ref vector?) (elems-ref vector?)))
+
+;;dict-lf: diccionario mutable. Guarda su tipo y una lista de pares (clave . valor).
+(define-datatype dict-lf dict-lf?
+
+  (un-dict (tipo-ref vector?) (pares-ref vector?)))
+
+;;instancia-sat: número de variables y lista de cláusulas (cada una, una lista de enteros no nulos).
+
+(define-datatype instancia-sat instancia-sat?
+  (una-instancia (nvars integer?) (clausulas (list-of (list-of integer?)))))
+
+(define contenido-vector (lambda (v) (cases vector-lf v (un-vector (t e) (deref e)))))
+(define cambiar-contenido-vector! (lambda (v nuevo) (cases vector-lf v (un-vector (t e) (setref! e nuevo)))))
+(define tipo-del-vector (lambda (v) (cases vector-lf v (un-vector (t e) (deref t)))))
+(define pares-dict (lambda (d) (cases dict-lf d (un-dict (t p) (deref p)))))
+(define cambiar-pares-dict! (lambda (d nuevo) (cases dict-lf d (un-dict (t p) (setref! p nuevo)))))
+(define tipo-del-dict (lambda (d) (cases dict-lf d (un-dict (t p) (deref t)))))
+
+;;no-implementada
+;;Error que lanzan los esqueletos hasta que alguien los implemente.
+
+(define no-implementada
+  (lambda (nombre)
+    (eopl:error nombre "Esta primitiva todavia no esta implementada")))
+
+;;exigir-n: verifica la cantidad de argumentos de una primitiva.
+
+(define exigir-n
+  (lambda (nombre args n)
+    (if (= (length args) n)
+        #t
+        (eopl:error nombre "Se esperaban ~s argumentos y se recibieron ~s" n (length args)))))
+
+;;argumento: verifica la cantidad de argumentos y devuelve el k-ésimo.
+
+(define argumento
+  (lambda (nombre args n k)
+    (begin (exigir-n nombre args n)
+           (list-ref args k))))
+
+(define exigir-lista
+  (lambda (nombre v)
+    (if (list? v) v (eopl:error nombre "Se esperaba una lista y se recibio ~s" v))))
+(define exigir-vector
+  (lambda (nombre v)
+    (if (vector-lf? v) v (eopl:error nombre "Se esperaba un vector y se recibio ~s" v))))
+(define exigir-dict
+  (lambda (nombre v)
+    (if (dict-lf? v) v (eopl:error nombre "Se esperaba un diccionario y se recibio ~s" v))))
+(define exigir-entero
+  (lambda (nombre v)
+    (if (and (number? v) (integer? v) (exact? v))
+        v
+        (eopl:error nombre "Se esperaba un entero y se recibio ~s" v))))
+
+;;exigir-posicion: verifica que 0 <= pos < limite y devuelve pos.
+
+(define exigir-posicion
+  (lambda (nombre pos limite)
+    (if (and (exigir-entero nombre pos) (>= pos 0) (< pos limite))
+        pos
+        (eopl:error nombre "Posicion ~s fuera de rango" pos))))
+
                                                
 ;;evaluar-expresion
 ;;Evalúa una expresión: una comparación, o una asignación x -> exp cuando hay "->".
@@ -403,6 +559,7 @@
 ;;identificador-de
 ;;Si la expresión aritmética es solo un identificador (sin operadores ni llamadas),
 ;;retorna ese identificador; en otro caso lanza un error.
+
 (define identificador-de
   (lambda (a)
     (cases aritmetica a
@@ -444,6 +601,7 @@
 
 ;;evaluar-aritmetica
 ;;Evalúa sumas, restas y concatenaciones de izquierda a derecha.
+
 (define evaluar-aritmetica
   (lambda (a env)
     (cases aritmetica a
@@ -462,6 +620,7 @@
 
 ;;evaluar-termino
 ;;Evalúa multiplicaciones y divisiones de izquierda a derecha.
+
 (define evaluar-termino
   (lambda (t env)
     (cases termino t
@@ -499,7 +658,15 @@
       (id-exp (id resto)
         (cases resto-id resto
           (resto-llamadas (argss)
-                          (aplicar-llamadas (buscar-variable id env) id argss env)))))))
+                          (aplicar-llamadas (buscar-variable id env) id argss env))))
+      ;; --- listas: casos aquí ---
+      
+      ;; --- vectores: casos aquí ---
+      
+      ;; --- diccionarios: casos aquí ---
+      
+      ;; --- SAT: casos aquí ---
+      )))
 
 ;;Funciones auxiliares
 
@@ -528,6 +695,7 @@
 ;;aplicar-llamadas
 ;;Si no hay listas de argumentos, devuelve el valor de la variable tal cual.
 ;;Si las hay, aplica el procedimiento a cada lista en orden (normalmente es solo una).
+
 (define aplicar-llamadas
   (lambda (valor id argss env)
     (if (null? argss)
@@ -541,6 +709,7 @@
 
 ;;aplicar-op-rel
 ;;Aplica un operador relacional a dos valores ya evaluados; retorna un booleano.
+
 (define aplicar-op-rel
   (lambda (prim v1 v2)
     (cases op-rel prim
@@ -553,6 +722,7 @@
 
 ;;aplicar-op-ad
 ;;Aplica suma, resta o concatenación a dos valores ya evaluados.
+
 (define aplicar-op-ad
   (lambda (prim v1 v2)
     (cases op-ad prim
@@ -562,6 +732,7 @@
 
 ;;aplicar-op-mul
 ;;Aplica multiplicación o división a dos valores ya evaluados.
+
 (define aplicar-op-mul
   (lambda (prim v1 v2)
     (cases op-mul prim
@@ -595,6 +766,7 @@
 
 ;;valor-verdad?
 ;;Función que recibe un booleano o un numero y retorna #f si es 0 y #t en cualquier otro caso.
+
 (define valor-verdad?
   (lambda (x)
     (cond
@@ -605,6 +777,7 @@
 ;;evaluar-lista-exp
 ;;Funcion que recibe una lista de expresiones y un entorno donde opera retorna la
 ;;lista del resultado de evaluar cada expresion en el entorno dado
+
 (define evaluar-lista-exp
   (lambda(exps env)
     (cond
@@ -620,6 +793,7 @@
 ;;Verifica cantidad y tipo de los argumentos y evalúa el cuerpo en un ambiente nuevo
 ;;que extiende el de la cerradura. El paso es por valor: cada parámetro es una
 ;;referencia nueva.
+
 (define aplicar-procedimiento
   (lambda (proc args)
     (cases procVal proc
@@ -650,6 +824,7 @@
 
 ;;evaluar-secuencia
 ;;Evalúa las sentencias de una secuencia en orden y retorna el valor de la última.
+
 (define evaluar-secuencia
   (lambda (sec env)
     (cases secuencia sec
@@ -668,6 +843,7 @@
 ;;evaluar-sentencia
 ;;Evalúa una sentencia: expresión simple, estructura de control o return.
 ;;return no interrumpe la ejecución; solo produce el valor de su expresión.
+
 (define evaluar-sentencia
   (lambda (sent env)
     (cases sentencia sent
@@ -687,6 +863,7 @@
 
 ;;evaluar-estructura
 ;;Evalúa BLOCK, LOCALS, if, switch, while y for.
+
 (define evaluar-estructura
   (lambda (est env)
     (cases estructura est
@@ -706,6 +883,7 @@
 
 ;;evaluar-switch
 ;;Ejecuta la secuencia del primer case cuyo valor coincide; si ninguno, el default.
+
 (define evaluar-switch
   (lambda (v vals secs default env)
     (cond
@@ -726,6 +904,7 @@
 
 ;;evaluar-while
 ;;Repite la secuencia mientras la condición sea verdadera. Retorna 0.
+
 (define evaluar-while
   (lambda (test sec env)
     (if (valor-verdad? (evaluar-expresion test env))
@@ -735,6 +914,7 @@
 
 ;;evaluar-for
 ;;Evalúa condición, cuerpo y actualización hasta que la condición sea falsa. Retorna 0.
+
 (define evaluar-for
   (lambda (test update sec env)
     (if (valor-verdad? (evaluar-expresion test env))
@@ -745,6 +925,7 @@
 
 ;;imprimir-valores
 ;;Imprime los valores separados por espacio y termina con salto de línea.
+
 (define imprimir-valores
   (lambda (vals)
     (if (null? vals)
@@ -756,14 +937,48 @@
 
 
 ;;formatear-valor
-;;Convierte los booleanos a True/False y los procedimientos a un texto, para imprimirlos con print.
+;;Convierte un valor a texto para print: True/False, listas (1 2 3), vectores [1, 2],
+;;diccionarios {"a": 1}, instancias SAT y procedimientos.
 
 (define formatear-valor
   (lambda (v)
     (cond
       ((eq? v #t) "True")
       ((eq? v #f) "False")
+      ((number? v) (number->string v))
+      ((string? v) v)
+      ((symbol? v) (symbol->string v))
+      ((null? v) "()")
+      ((list? v) (string-append "(" (unir-con " " (map formatear-elemento v)) ")"))
+      ((vector-lf? v) (string-append "[" (unir-con ", " (map formatear-elemento (contenido-vector v))) "]"))
+      ((dict-lf? v) (string-append "{" (unir-con ", " (map formatear-par (pares-dict v))) "}"))
+      ((instancia-sat? v) (formatear-sat v))
       ((procVal? v) "<procedimiento>")
       (else v))))
+
+(define formatear-elemento
+  (lambda (v)
+    (if (string? v) (string-append "\"" v "\"") (formatear-valor v))))
+
+(define formatear-par
+  (lambda (p)
+    (string-append (formatear-elemento (car p)) ": " (formatear-elemento (cdr p)))))
+
+(define formatear-sat
+  (lambda (v)
+    (cases instancia-sat v
+      (una-instancia (n cs)
+                     (string-append "FNC " (number->string n) " ("
+                                    (unir-con " and "
+                                              (map (lambda (c)
+                                                     (string-append "(" (unir-con " or " (map number->string c)) ")"))
+                                                   cs))
+                                    ")")))))
+
+(define unir-con
+  (lambda (sep strs)
+    (cond ((null? strs) "")
+          ((null? (cdr strs)) (car strs))
+          (else (string-append (car strs) sep (unir-con sep (cdr strs)))))))
 
 ;(interpretador)
