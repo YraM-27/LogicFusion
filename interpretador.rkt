@@ -154,7 +154,19 @@
     (estructura ("while" expresion secuencia) while-est)
     (estructura ("for" "(" expresion ";" expresion ";" expresion ")" secuencia) for-est)
     
-    ;; --- listas: producciones aquí ---
+    ;; --- listas ---
+    (factor ("empty") lista-vacia-exp)
+    (factor (primitiva-lista "(" (separated-list expresion ",") ")") primapp-lista-exp)
+    (primitiva-lista ("empty?") primitiva-empty?)
+    (primitiva-lista ("make-list") primitiva-make-list)
+    (primitiva-lista ("list?") primitiva-list?)
+    (primitiva-lista ("head") primitiva-head)
+    (primitiva-lista ("tail") primitiva-tail)
+    (primitiva-lista ("append") primitiva-append)
+    (primitiva-lista ("ref-list") primitiva-ref-list)
+    (primitiva-lista ("length") primitiva-length)
+    
+    
     
     ;; --- vectores: producciones aquí ---
     
@@ -662,7 +674,7 @@
         (cases resto-id resto
           (resto-llamadas (argss)
                           (aplicar-llamadas (buscar-variable id env) id argss env))))
-      ;; --- listas: casos aquí ---
+      ;; --- lista: casos aquí --- 
       
       ;; --- vectores: casos aquí ---
       
