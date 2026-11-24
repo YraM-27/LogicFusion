@@ -674,7 +674,10 @@
         (cases resto-id resto
           (resto-llamadas (argss)
                           (aplicar-llamadas (buscar-variable id env) id argss env))))
-      ;; --- lista: casos aquí --- 
+      ;; --- lista ---
+      (lista-vacia-exp () '())
+      (primapp-lista-exp (prim exps)
+                         (aplicar-primitiva-listas prim(evaluar-lista-exp exps env)))
       
       ;; --- vectores: casos aquí ---
       
@@ -779,6 +782,52 @@
       (primitiva-negacion-booleana () (not (valor-verdad? v1)))
      )))
 
+;;aplicar-primitiva-listas
+(define aplicar-primitiva-listas
+  (lambda (prim args)
+    (cases primitiva-lista prim
+      (primitiva-empty? () (null? (car args)))
+      (primitiva-make-list () (if (mismo-tipo? (car args)(cadr args))
+                                  (cons (car args) (cdr args))
+                                  (eopl:error 'make-list "El elemento ~s no es del mismo tipo que los de la lista" (car args))))
+      (primitiva-list? () (list? (car args)))
+      (primitiva-head () (if (null? (car args))
+                              (eopl:error 'head "La lista está vacía")
+                              (car (car args))))
+      (primitiva-tail () (if (null? (car args))
+                            (eopl:error 'tail "No se puede sacar tail de una lista vacia")
+                            (cdr (cdr args))))
+      (primitiva-append ()(let ((l1 (car args))
+                                (l2 (cadr args)))
+                            (if (or (null? l1)(mismo-tipo? (car l1) l2))
+                                (unir-listas l1 l2)
+                                (eopl:error 'append "Las dos listas deben tener el mismo tipo de elementos"))))
+      (primitiva-ref-list () (list-ref (car args)
+                                       (exigir-posicion 'ref-list (cadr args)(contar-elementos (car args)))))
+      (primitiva-length () (contar-elementos (car args))))))
+      
+
+;;tipo-de
+;;Recibe un valor y devuelve un símbolo con su tipo
+;;int y float cuentan como  el mismo tipo ('numero)
+(define tipo-de
+  (lambda (v)
+    (cond ((number? v) 'numero)
+          ((string? v) 'string)
+          ((boolean? v) 'bool)
+          ((list? v) 'lista)
+          (else 'otro))))
+
+;;mismo-tipo?
+;;Recibe un valor y una lista; retorna #t si la lista está vacía o si el valor es
+;;del mismo tipo que el primer elemento de la lista.
+(define mismo-tipo?
+  (lambda (v lst)
+    (or (null? lst)
+        (eq? (tipo-de v)(tipo-de (car lst))))))
+
+  
+  
 ;;valor-verdad?
 ;;Función que recibe un booleano o un numero y retorna #f si es 0 y #t en cualquier otro caso.
 
