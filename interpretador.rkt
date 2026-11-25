@@ -690,7 +690,12 @@
       
       ;; --- vectores: casos aquí ---
       
-      ;; --- diccionarios: casos aquí ---
+      ;; --- diccionarios ---
+      (dict-exp (claves valores)
+                (crear-dict (evaluar-lista-exp claves env)
+                            (evaluar-lista-exp valores env)))
+      (primapp-dict-exp (prim exps)
+                        (aplicar-primitiva-dict prim (evaluar-lista-exp exps env)))
       
       ;; --- SAT: casos aquí ---
       )))
