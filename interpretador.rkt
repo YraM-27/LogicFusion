@@ -821,6 +821,7 @@
       (primitiva-length () (contar-elementos (car args))))))
       
 ;;aplicar-primitiva-dict
+;;Recibe una primitiva de diccionarios y la lista de argumentos ya evaluados.
 (define aplicar-primitiva-dict
   (lambda (prim args)
     (cases primitiva-diccionario prim
@@ -1148,3 +1149,16 @@
 ;(scan&parse "GLOBALS { list<int> nums = (10, 20, 30); } PROGRAM { proc main() { print(ref-list(nums, 1)); return length(nums); } }")
 ;;Procedimiento recursivo que suma una lista
 ;(scan&parse "GLOBALS { proc suma = lambda (list<int> l) { if empty?(l) { return 0; } else { return head(l) + suma(tail(l)); } } } PROGRAM { proc main() { return suma((1, 2, 3, 4)); } }")
+
+
+;;Ejemplos de diccionarios con scan&parse
+
+;;Literal de diccionario
+;(scan&parse "GLOBALS { dict<string, int> edades = {\"Juan\": 25, \"Ana\": 30}; } PROGRAM { proc main() { return edades; } }")
+;;create-dict y dict?
+;(scan&parse "GLOBALS { dict<string, int> d = create-dict(); } PROGRAM { proc main() { print(dict?(d), dict?(42)); return 0; } }")
+;;set-dict y ref-dict
+;(scan&parse "GLOBALS { dict<string, int> d = create-dict(); } PROGRAM { proc main() { set-dict(d, \"edad\", 34); set-dict(d, \"edad\", 35); return ref-dict(d, \"edad\"); } }")
+;;keys y values
+;(scan&parse "GLOBALS { dict<string, int> edades = {\"Juan\": 25, \"Ana\": 30}; } PROGRAM { proc main() { print(keys(edades)); return values(edades); } }")
+
