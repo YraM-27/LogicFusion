@@ -820,6 +820,26 @@
                                        (exigir-posicion 'ref-list (cadr args)(contar-elementos (car args)))))
       (primitiva-length () (contar-elementos (car args))))))
       
+;;aplicar-primitiva-dict
+(define aplicar-primitiva-dict
+  (lambda (prim args)
+    (cases primitiva-diccionario prim
+      (primitiva-create-dict () (crear-dict '() '()))
+      (primitiva-dict? () (dict-lf? (car args)))
+      (primitiva-ref-dict ()
+                          (buscar-clave (pares-dict (exigir-dict 'ref-dict (car args))) (cadr args)))
+      (primitiva-set-dict ()
+                         (let ((d (exigir-dict 'set-dict (car args)))
+                               (k (cadr args))
+                               (v (caddr args)))
+                           (validar-par-dict d k v)
+                           (cambiar-pares-dict! d (poner-clave (pares-dict d) k v))
+                           d))
+      (primitiva-keys ()
+                      (map car (pares-dict (exigir-dict 'keys (car args)))))
+      (primitiva-values ()
+                      (map cdr (pares-dict (exigir-dict 'values (car args))))))))
+      
 
 ;;tipo-de
 ;;Recibe un valor y devuelve un símbolo con su tipo
@@ -840,7 +860,57 @@
     (or (null? lst)
         (eq? (tipo-de v)(tipo-de (car lst))))))
 
-  
+;;crear-dict
+;;Recibe la lista de claves y la de valores ya evaluadas y crea un diccionario nuevo.
+;;Su tipo empieza en void; validar-tipo le pone el tipo declarado (preparar-valor).
+;;Si una clave se repite en el literal, lanza error porque las claves son únicas.
+
+(define crear-dict
+  (lambda (claves valores)
+    (un-dict (crear-ref (tipo-void))
+             (crear-ref (armar-pares claves valores)))))
+
+;;armar-pares
+;;Une claves y valores en pares.
+(define armar-pares
+  (lambda (claves valores)
+    (cond ((null? claves) '())
+          ((esta-clave? (car claves) (cdr claves))
+           (eopl:error 'dict "La clave ~s esta repetida" (car claves)))
+          (else (cons (cons (car claves) (car valores))
+                      (armar-pares (cdr claves) (cdr valores)))))))
+
+;;esta-clave?: #t si la clave k aparece en la lista de claves.
+(define esta-clave?
+  (lambda (k claves)
+    (cond ((null? claves) #f)
+          ((valores-iguales? k (car claves)) #t)
+          (else (esta-clave? k (cdr claves))))))
+
+;;buscar-clave: devuelve el valor asociado a k en la lista de pares, o error si no está.
+(define buscar-clave
+  (lambda (pares k)
+    (cond ((null? pares) (eopl:error 'ref-dict "La clave ~s no existe" k))
+          ((valores-iguales? (car (car pares)) k) (cdr (car pares)))
+          (else (buscar-clave (cdr pares) k)))))
+
+;;poner-clave: devuelve los pares con k cambiada a v; si k no está, agrega el par al final.
+(define poner-clave
+  (lambda (pares k v)
+    (cond ((null? pares) (list (cons k v)))
+          ((valores-iguales? (car (car pares)) k) (cons (cons k v) (cdr pares)))
+          (else (cons (car pares) (poner-clave (cdr pares) k v))))))
+
+;;validar-par-dict: si el diccionario ya tiene tipo dict<T,U>, la clave debe ser T y el valor U.
+(define validar-par-dict
+  (lambda (d k v)
+    (cases tipo (tipo-del-dict d)
+      (tipo-dict (tk tv)
+                 (if (and (valor-coincide-tipo? tk k) (valor-coincide-tipo? tv v))
+                     #t
+                     (eopl:error 'set-dict "El par ~s : ~s no coincide con el tipo del diccionario" k v)))
+      (else #t))))
+
   
 ;;valor-verdad?
 ;;Función que recibe un booleano o un numero y retorna #f si es 0 y #t en cualquier otro caso.
