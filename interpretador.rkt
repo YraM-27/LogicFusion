@@ -156,7 +156,18 @@
     
     ;; --- listas: producciones aquí ---
     
+    
     ;; --- vectores: producciones aquí ---
+
+    (factor ("["(separated-list expresion ",") "]" ) vec-exp)
+    (factor ("make-vector" "(" numero ")" ) make-vector-exp)
+    (factor ("ref-vector" "(" expresion "," expresion ")") ref-vec-exp)
+    (factor("set-vector" "(" expresion "," expresion "," expresion ")") set-vec-exp)
+
+    (primitiva-unaria ("vector?") primitiva-vec?)
+    
+
+
     
     ;; --- diccionarios: producciones aquí ---
     
@@ -662,6 +673,48 @@
       ;; --- listas: casos aquí ---
       
       ;; --- vectores: casos aquí ---
+      (vec-exp (vect) (vector-expresiones vect env))
+      
+      (make-vector-exp (num)
+                    (if (and (integer? num) (>= num 0))
+                        (make-vector num)
+                        (eopl:error 'make-vector "El numero debe ser entero no negativo")
+                           ))
+      (ref-vec-exp (exp1 exp2)
+                   (let ([vect (evaluar-expresion exp1 env)]
+                         [num (evaluar-expresion exp2 env)])
+                     (if (and(vector? vect)(integer? num))
+                         (if (and(>= num 0)(< num (vector-length vect)))
+                             (vector-ref vect num)
+                             (eopl:error ref-vec-exp "El valor no es un indice valido")
+                             )
+                         (eopl:error ref-vec-exp "Parametros no permitidos: se esperaba un vector y un indice entero")
+                         )
+                     )
+                   )
+      (set-vec-exp(exp1 exp2 exp3)
+                   (let* ([id (identificador-de exp1)]
+                          [ref-tipo (buscar-info id env)]
+                          [vec-tipo (cadr ref-tipo)]
+                          [tipo (cases tipo vec-tipo
+                                  (tipo-vector (t) t)
+                                  (else(eopl:error 'set-vec-exp "La variable no es de tipo vector")))]
+
+                          [vect (evaluar-expresion exp1 env)]
+                          [val (evaluar-expresion exp2 env)]
+                          [num (evaluar-expresion exp3 env)])
+                     (if (and(vector? vect)(and(integer? num)))
+                         (if (and(>= num 0)(< num (vector-length vect)))
+                             (if (valor-coincide-tipo? tipo val)
+                                 (vector-set! vect num val)
+                                 (eopl:error 'set-vec-exp "El valor a remplazar es de distinto tipo al vector")
+                                 )
+                             (eopl:error 'set-vec-exp "El numero no es un indice valido")
+                             )
+                         (eopl:error 'ref-vec-exp "Parametros no permitidos: se esperaba un vector y un indice entero")
+                         )
+                     )
+                   )
       
       ;; --- diccionarios: casos aquí ---
       
@@ -669,6 +722,23 @@
       )))
 
 ;;Funciones auxiliares
+
+;;vector-expresiones
+;;Recibe una lista de expresiones y devuelve el vector de sus resultados
+;;Se usa para crear un vector
+
+(define vector-expresiones
+  (lambda (lst env)
+    (let ([eval-listexp (lambda (l1) (evaluar-expresion l1 env))])
+
+      (if (null? lst)
+        (make-vector 0)
+        (list->vector(map eval-listexp lst))
+        )
+      
+      )
+    )
+  )
 
 ;;contar-elementos
 ;;Recibe una lista y devuelve cuántos elementos tiene.
@@ -762,6 +832,7 @@
       (primitiva-add1 () (+ v1 1))
       (primitiva-sub1 () (- v1 1))
       (primitiva-negacion-booleana () (not (valor-verdad? v1)))
+      (primitiva-vec? () (vector? v1))
      )))
 
 ;;valor-verdad?
