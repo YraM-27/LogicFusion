@@ -788,7 +788,7 @@
     (cases primitiva-lista prim
       (primitiva-empty? () (null? (car args)))
       (primitiva-make-list () (if (mismo-tipo? (car args)(cadr args))
-                                  (cons (car args) (cdr args))
+                                  (cons (car args) (cadr args))
                                   (eopl:error 'make-list "El elemento ~s no es del mismo tipo que los de la lista" (car args))))
       (primitiva-list? () (list? (car args)))
       (primitiva-head () (if (null? (car args))
@@ -796,7 +796,7 @@
                               (car (car args))))
       (primitiva-tail () (if (null? (car args))
                             (eopl:error 'tail "No se puede sacar tail de una lista vacia")
-                            (cdr (cdr args))))
+                            (cdr (car args))))
       (primitiva-append ()(let ((l1 (car args))
                                 (l2 (cadr args)))
                             (if (or (null? l1)(mismo-tipo? (car l1) l2))
@@ -1046,3 +1046,21 @@
           (else (string-append (car strs) sep (unir-con sep (cdr strs)))))))
 
 ;(interpretador)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Ejemplos de listas con scan&parse
+
+;;Literal de lista y lista vacía
+;(scan&parse "GLOBALS { list<int> nums = (1, 2, 3); list<int> vacia = empty; } PROGRAM { proc main() { return nums; } }")
+;;empty? y list?
+;(scan&parse "GLOBALS { } PROGRAM { proc main() { print(empty?(empty), list?(42)); return 0; } }")
+;;make-list
+;(scan&parse "GLOBALS { list<int> nums = make-list(1, empty); } PROGRAM { proc main() { nums -> make-list(2, nums); return nums; } }")
+;;head y tail
+;(scan&parse "GLOBALS { list<int> nums = (10, 20, 30); } PROGRAM { proc main() { print(head(nums)); return tail(nums); } }")
+;;append
+;(scan&parse "GLOBALS { list<int> a = (1, 2); list<int> b = (3, 4); } PROGRAM { proc main() { return append(a, b); } }")
+;;ref-list y length
+;(scan&parse "GLOBALS { list<int> nums = (10, 20, 30); } PROGRAM { proc main() { print(ref-list(nums, 1)); return length(nums); } }")
+;;Procedimiento recursivo que suma una lista
+;(scan&parse "GLOBALS { proc suma = lambda (list<int> l) { if empty?(l) { return 0; } else { return head(l) + suma(tail(l)); } } } PROGRAM { proc main() { return suma((1, 2, 3, 4)); } }")
