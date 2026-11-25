@@ -170,7 +170,16 @@
     
     ;; --- vectores: producciones aquí ---
     
-    ;; --- diccionarios: producciones aquí ---
+    ;; --- diccionarios ---
+    (factor ("{" (separated-list expresion ":" expresion ",") "}") dict-exp)
+    (factor (primitiva-diccionario "(" (separated-list expresion ",") ")") primapp-dict-exp)
+    (primitiva-diccionario ("create-dict") primitiva-create-dict)
+    (primitiva-diccionario ("dict?") primitiva-dict?)
+    (primitiva-diccionario ("ref-dict") primitiva-ref-dict)
+    (primitiva-diccionario ("set-dict") primitiva-set-dict)
+    (primitiva-diccionario ("keys") primitiva-keys)
+    (primitiva-diccionario ("values") primitiva-values)
+    
     
     ;; --- SAT: producciones aquí ---
     
